@@ -25,7 +25,6 @@ with app.app_context():
 
 
 # Bus management routes
-
 @app.route('/buses', methods=['POST'])
 def create_bus():
     try:
@@ -108,7 +107,39 @@ def get_bus_by_id(bus_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/buses/schedule', methods=['POST'])
+def schedule_bus():
+    try:
+        data = request.get_json()
+        number_plate = data.get('number_plate')
+        route = data.get('route')
+        scheduled_time = data.get('scheduled_time')
 
+        if not number_plate or not route or not scheduled_time:
+            return jsonify({'error': 'Missing number_plate, route, or scheduled_time'}), 400
+
+        # Parse scheduled_time to datetime object
+        scheduled_time = datetime.strptime(scheduled_time, '%Y-%m-%d %H:%M:%S')
+
+        # Query the database to find the bus by number_plate and route
+        bus = Bus.query.filter_by(number_plate=number_plate, route=route).first()
+        if not bus:
+            return jsonify({'error': 'Bus not found'}), 404
+
+        # Update the bus's departure_time attribute with scheduled time
+        bus.departure_time = scheduled_time
+
+        # Commit changes to the database
+        db.session.commit()
+
+        return jsonify({'message': 'Bus scheduled successfully'}), 200
+
+    except ValueError:
+        return jsonify({'error': 'Invalid scheduled_time format. It should be in YYYY-MM-DD HH:MM:SS format'}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # M-PESA API settings
 MPESA_CONSUMER_KEY = 'Ofee1mD0EBOFJKOddRlbewvzrb0Z2LXa8fdRzpgVEMlkamud'
