@@ -1,20 +1,114 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+# from models import  Driver, Passenger
+from models import Bus
+from models import db 
 import base64
 import requests
+import re
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 
 app = Flask(__name__)
+my_endpoint = "https://9542-102-68-76-231.ngrok-free.app"
+CORS(app, resources={r"/*": {"origins": "http://localhost:3001"}})
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'  
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+db.init_app(app)
+with app.app_context():
+    db.create_all()
 
-# Import models
-from models import User, Driver, Passenger, Admin, Bus, Booking
+
+# Bus management routes
+
+@app.route('/buses', methods=['POST'])
+def create_bus():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['company_name', 'number_plate', 'no_of_seats', 'cost_per_seat', 'route', 'driver_id']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Validate data types and constraints
+        if not isinstance(data['company_name'], str) or not data['company_name'].strip():
+            return jsonify({'error': 'Invalid company_name'}), 400
+
+        if not isinstance(data['number_plate'], str) or not data['number_plate'].strip():
+            return jsonify({'error': 'Invalid number_plate'}), 400
+        
+        # Validate number_plate format
+        plate_regex = r'^K[A-D][A-Z]{1} \d{3}[A-Z]$'
+        if not re.match(plate_regex, data['number_plate']):
+            return jsonify({'error': 'Invalid number_plate format'}), 400
+
+        if not isinstance(data['no_of_seats'], int) or data['no_of_seats'] <= 0:
+            return jsonify({'error': 'Invalid no_of_seats. It must be a positive integer'}), 400
+
+        if not isinstance(data['cost_per_seat'], (int, float)) or data['cost_per_seat'] <= 0:
+            return jsonify({'error': 'Invalid cost_per_seat. It must be a positive number'}), 400
+
+        if not isinstance(data['route'], str) or not data['route'].strip():
+            return jsonify({'error': 'Invalid route'}), 400
+
+        if not isinstance(data['driver_id'], int) or data['driver_id'] <= 0:
+            return jsonify({'error': 'Invalid driver_id. It must be a positive integer'}), 400
+
+        # Create the bus object
+        bus = Bus(
+            company_name=data['company_name'],
+            number_plate=data['number_plate'],
+            no_of_seats=data['no_of_seats'],
+            cost_per_seat=data['cost_per_seat'],
+            route=data['route'],
+            driver_id=data['driver_id']
+        )
+
+        # Add to database
+        db.session.add(bus)
+        db.session.commit()
+        return jsonify({'message': 'Bus created successfully'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/buses', methods=['GET'])
+def get_buses():
+    try:
+        buses = Bus.query.all()
+        return jsonify([bus.to_dict() for bus in buses]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/buses/<int:bus_id>', methods=['GET'])
+def get_bus_by_id(bus_id):
+    try:
+        bus = Bus.query.get(bus_id)
+        if bus:
+            return jsonify({
+                'id': bus.id,
+                'company_name': bus.company_name,
+                'number_plate': bus.number_plate,
+                'no_of_seats': bus.no_of_seats,
+                'cost_per_seat': bus.cost_per_seat,
+                'route': bus.route,
+                'driver_id': bus.driver_id
+            }), 200
+        else:
+            return jsonify({'error': 'Bus not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 # M-PESA API settings
 MPESA_CONSUMER_KEY = 'Ofee1mD0EBOFJKOddRlbewvzrb0Z2LXa8fdRzpgVEMlkamud'

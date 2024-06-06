@@ -1,16 +1,22 @@
+# models.py
 from flask_sqlalchemy import SQLAlchemy
 from uuid import uuid4
 from sqlalchemy import MetaData, DateTime
 from datetime import datetime
+from sqlalchemy.orm import relationship
+
 
 metadata = MetaData(naming_convention={
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
 })
-
 db = SQLAlchemy(metadata=metadata)
 
 def get_uuid():
     return uuid4().hex
+
+def get_db():
+    from app import db
+    return db
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -21,7 +27,7 @@ class User(db.Model):
     driver = db.relationship('Driver', backref='user', uselist=False)
     passenger = db.relationship('Passenger', backref='user', uselist=False)
 
-    def __reprpython__(self):
+    def __repr__(self):
         return f"<User id={self.id}, email={self.email}, role={self.role}>"
 
 class Driver(db.Model):
@@ -30,7 +36,9 @@ class Driver(db.Model):
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    user = relationship("User", back_populates="driver")
 
+    User.driver = relationship("Driver", back_populates="user", uselist=False)
     def __repr__(self):
         return f"<Driver id={self.id}, username={self.username}>"
 
@@ -70,6 +78,18 @@ class Bus(db.Model):
         return f"<Bus id={self.id}, company_name={self.company_name}, number_plate={self.number_plate}, driver_id={self.driver_id}, route={self.route}>"
 
     def to_dict(self):
+        return {
+            'id': self.id,
+            'company_name': self.company_name,
+            'driver_id': self.driver_id,
+            'number_plate': self.number_plate,
+            'no_of_seats': self.no_of_seats,
+            'cost_per_seat': self.cost_per_seat,
+            'route': self.route,
+            'departure_time': self.departure_time.isoformat() if self.departure_time else None
+        }
+
+    def serialize(self):
         return {
             'id': self.id,
             'company_name': self.company_name,
