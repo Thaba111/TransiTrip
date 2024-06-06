@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 # from models import  Driver, Passenger
-from models import Bus
+from models import Bus, Booking
 from models import db 
 import base64
 import requests
@@ -137,6 +137,122 @@ def schedule_bus():
     except ValueError:
         return jsonify({'error': 'Invalid scheduled_time format. It should be in YYYY-MM-DD HH:MM:SS format'}), 400
 
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/buses/cost-per-seat', methods=['GET'])
+def get_cost_per_seat():
+    try:
+        buses = Bus.query.all()
+        cost_per_seat_info = []
+
+        for bus in buses:
+            # Validate cost_per_seat
+            if isinstance(bus.cost_per_seat, (int, float)) and bus.cost_per_seat > 0:
+                cost_per_seat_info.append({
+                    "bus_id": bus.id,
+                    "cost_per_seat": bus.cost_per_seat
+                })
+            else:
+                app.logger.warning(f"Invalid cost_per_seat for bus ID {bus.id}: {bus.cost_per_seat}")
+
+        return jsonify(cost_per_seat_info), 200
+
+    except Exception as e:
+        app.logger.error(f"Error fetching cost per seat: {e}")
+        return jsonify({'error': str(e)}), 500    
+
+@app.route('/buses/cost-per-seat/<int:bus_id>', methods=['GET'])
+def get_cost_per_seat_by_id(bus_id):
+    bus = Bus.query.get(bus_id)
+    if not bus:
+        return jsonify({'error': 'Bus not found'}), 404
+
+    return jsonify({'cost_per_seat': bus.cost_per_seat})
+
+@app.route('/buses/scheduled', methods=['GET'])
+def get_scheduled_buses():
+    try:
+    
+        scheduled_buses = Bus.query.filter(Bus.departure_time.isnot(None)).all()
+        serialized_buses = [bus.serialize() for bus in scheduled_buses]
+        
+        # Return the serialized buses as a JSON response
+        return jsonify(serialized_buses), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+            
+@app.route('/buses/add-price-per-seat/<int:bus_id>', methods=['POST'])
+def add_price_per_seat(bus_id):
+    try:
+        data = request.get_json()
+        price_per_seat = data.get('price_per_seat')
+
+        if not price_per_seat:
+            return jsonify({'error': 'Missing price_per_seat'}), 400
+
+        # Query the database to find the bus by its ID
+        bus = Bus.query.get(bus_id)
+        if not bus:
+            return jsonify({'error': 'Bus not found'}), 404
+
+        # Update the bus's price_per_seat attribute
+        bus.price_per_seat = price_per_seat
+
+        # Commit changes to the database
+        db.session.commit()
+
+        return jsonify({'message': 'Price per seat added successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/buses/<int:bus_id>', methods=['PUT'])
+def update_bus(bus_id):
+    try:
+        data = request.json
+        bus = Bus.query.get(bus_id)
+        if not bus:
+            return jsonify({'error': 'Bus not found'}), 404
+
+        # Update the bus attributes
+        if 'number_plate' in data:
+            bus.number_plate = data['number_plate']
+        if 'no_of_seats' in data:
+            bus.no_of_seats = data['no_of_seats']
+        if 'cost_per_seat' in data:
+            bus.cost_per_seat = data['cost_per_seat']
+        if 'route' in data:
+            bus.route = data['route']
+        if 'departure_time' in data:
+            bus.departure_time = datetime.fromisoformat(data['departure_time'])  # Handle ISO format
+
+        # Commit changes to the database
+        db.session.commit()
+
+        return jsonify({'message': 'Bus updated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/buses/<int:bus_id>', methods=['DELETE'])
+def remove_bus(bus_id):
+    try:
+        bus = Bus.query.get(bus_id)
+        if bus:
+            
+            Booking.query.filter_by(bus_id=bus_id).delete()
+            db.session.delete(bus)
+            db.session.commit()
+            return jsonify({'message': 'Bus and related bookings removed successfully'}), 200
+        else:
+            return jsonify({'error': 'Bus not found'}), 404
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
