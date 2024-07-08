@@ -1,6 +1,6 @@
 # forms.py
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, IntegerField
+from wtforms import StringField, PasswordField, IntegerField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, Regexp, ValidationError
 from models import User, Driver, Passenger, Admin, Bus, Booking
 from wtforms.fields import DateTimeField
@@ -55,3 +55,9 @@ class BusForm(FlaskForm):
     cost_per_seat = IntegerField('Cost per Seat', validators=[DataRequired()])
     route = StringField('Route', validators=[DataRequired()])
     departure_time = DateTimeField('Departure Time', format='%Y-%m-%dT%H:%M:%S', validators=[DataRequired()])
+
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
+    submit = SubmitField('Register')
